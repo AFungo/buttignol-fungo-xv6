@@ -26,6 +26,9 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+//make a process runnable
+extern void make_runnable(struct proc *p, int lvl);
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -145,7 +148,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
+  
   return p;
 }
 
@@ -319,7 +322,9 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-  np->state = RUNNABLE;
+  //np->state = RUNNABLE;
+  //All son process start in level 0
+  make_runnable(np, 0);
   release(&np->lock);
 
   return pid;
@@ -470,6 +475,46 @@ scheduler(void)
     }
   }
 }
+struct mlf *procq;
+void enqueue(struct proc *p)
+{
+    procq->levels = malloc
+    struct level *l = procq->levels[p->lvl];
+    acquire(l->lock);
+    l->last->next = p;
+    l->last = p;
+    release(l->lock);
+}
+
+struct proc *dequeue(int lvl)
+{
+    struct proc *p;
+    struct level *l = procq->levels[lvl];
+    acquire(l->lock);
+    p = l->first;
+    l->first = l->first->next;
+    p->next = 0;
+    release(l->lock);
+    return p;
+}
+
+void setpriority(struct proc *p, int lvl){
+    if(p->lvl == 0 && lvl < 0){
+        //do nothing
+    }else if(p->lvl == 4 && lvl > 0){
+        //do nothing
+    }else{
+        p->lvl = lvl == 0? lvl : p->lvl + lvl;
+    }
+}
+
+void make_runnable(struct proc *p, int lvl)
+{
+	p->state = RUNNABLE;
+	setpriority(p, lvl);
+    //p->level = lvl;
+    enqueue(p);
+}
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
@@ -504,7 +549,8 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  p->state = RUNNABLE;
+  //increase level because if p does yield() it used all quantum
+  make_runnable(p, 1); 
   sched();
   release(&p->lock);
 }
@@ -572,7 +618,8 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
-        p->state = RUNNABLE;
+        //p dosnt use all quantum, increese level 
+        make_runnable(p, -1);
       }
       release(&p->lock);
     }
@@ -593,7 +640,8 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
-        p->state = RUNNABLE;
+        make_runnable(p, 0);//Deberia tener prioridad 0 no?
+        //p->state = RUNNABLE;
       }
       release(&p->lock);
       return 0;

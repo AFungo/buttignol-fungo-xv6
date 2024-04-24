@@ -85,6 +85,10 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
 
+  // these are mlf data
+  struct proc *next;
+  int lvl;
+
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   void *chan;                  // If non-zero, sleeping on chan
@@ -104,4 +108,16 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+};
+
+
+struct mlf{
+    struct level *levels[MAXLEVELS];
+ };
+
+struct level{
+    struct proc* first;
+    struct proc* last;
+    struct spinlock *lock;
 };
