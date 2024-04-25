@@ -26,6 +26,8 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+struct mlf procq;
+
 //make a process runnable
 extern void make_runnable(struct proc *p, int lvl);
 
@@ -475,45 +477,49 @@ scheduler(void)
     }
   }
 }
-struct mlf *procq;
+
+void mlfinit() {
+  
+}
+
 void enqueue(struct proc *p)
 {
-    procq->levels = malloc
-    struct level *l = procq->levels[p->lvl];
-    acquire(l->lock);
-    l->last->next = p;
-    l->last = p;
-    release(l->lock);
+  //procq->levels = malloc
+  struct level *l = procq.levels[p->lvl];
+  acquire(l->lock);
+  l->last->next = p;
+  l->last = p;
+  release(l->lock);
 }
 
 struct proc *dequeue(int lvl)
 {
-    struct proc *p;
-    struct level *l = procq->levels[lvl];
-    acquire(l->lock);
-    p = l->first;
-    l->first = l->first->next;
-    p->next = 0;
-    release(l->lock);
-    return p;
+  struct proc *p;
+  struct level *l = procq.levels[lvl];
+  acquire(l->lock);
+  p = l->first;
+  l->first = l->first->next;
+  p->next = 0;
+  release(l->lock);
+  return p;
 }
 
-void setpriority(struct proc *p, int lvl){
-    if(p->lvl == 0 && lvl < 0){
-        //do nothing
-    }else if(p->lvl == 4 && lvl > 0){
-        //do nothing
-    }else{
-        p->lvl = lvl == 0? lvl : p->lvl + lvl;
-    }
+void set_priority(struct proc *p, int lvl){
+  if(p->lvl == 0 && lvl < 0){
+      //do nothing
+  }else if(p->lvl == 3 && lvl > 0){
+      //do nothing
+  }else{
+      p->lvl = lvl == 0? lvl : p->lvl + lvl;
+  }
 }
 
 void make_runnable(struct proc *p, int lvl)
 {
 	p->state = RUNNABLE;
-	setpriority(p, lvl);
+	set_priority(p, lvl);
     //p->level = lvl;
-    enqueue(p);
+  enqueue(p);
 }
 
 // Switch to scheduler.  Must hold only p->lock

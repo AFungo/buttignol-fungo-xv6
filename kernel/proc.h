@@ -112,12 +112,15 @@ struct proc {
 };
 
 
-struct mlf{
-    struct level *levels[MAXLEVELS];
- };
 
 struct level{
-    struct proc* first;
-    struct proc* last;
-    struct spinlock *lock;
+  struct proc* first;
+  struct proc* last;
+  struct spinlock *lock;
 };
+
+struct mlf{
+  struct level *levels[MAXLEVELS];
+};
+
+extern struct mlf procq;
