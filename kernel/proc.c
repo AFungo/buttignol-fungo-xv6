@@ -26,7 +26,7 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
-struct mlf procq;
+struct mlf *procq;
 
 //make a process runnable
 extern void make_runnable(struct proc *p, int lvl);
@@ -254,8 +254,8 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  p->state = RUNNABLE;
-
+  //p->state = RUNNABLE;
+	make_runnable(p, 0);
   release(&p->lock);
 }
 
@@ -441,6 +441,8 @@ wait(uint64 addr)
   }
 }
 
+
+struct proc *dequeue(int lvl);
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -458,49 +460,81 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+		int lvl = 0;
+		do{
+			p = dequeue(lvl);
+			if(p!=0){
+				acquire(&p->lock);
+				if(p->state == RUNNABLE) {
+      		printf("Estoy a punto de ejecutar algo\n");
+					// Switch to chosen process.  It is the process's job
+      		// to release its lock and then reacquire it
+      		// before jumping back to us.
+					p->state = RUNNING;
+      		c->proc = p;
+      		swtch(&c->context, &p->context);
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-      }
-      release(&p->lock);
-    }
-  }
+      		// Process is done running for now.
+      		// It should have changed its p->state before coming back.
+      		c->proc = 0;
+					printf("DSDADSA\n");
+    		}
+				release(&p->lock);
+			}
+		}while(++lvl < MAXLEVELS && p == 0);
+	}
 }
 
-void mlfinit() {
-  
+void mlf_init() {
+   
+	procq = kalloc();
+  //for(struct level *l = *procq->levels; l < procq->levels[MAXLEVELS]; l++){
+  for(int i = 0; i < MAXLEVELS; i++){
+    procq->levels[i] = kalloc();
+		initlock(&procq->levels[i]->lock, "level");
+		procq->levels[i]->first = 0;
+		procq->levels[i]->last = 0;
+	}	
 }
 
 void enqueue(struct proc *p)
 {
-  //procq->levels = malloc
-  struct level *l = procq.levels[p->lvl];
-  acquire(l->lock);
-  l->last->next = p;
-  l->last = p;
-  release(l->lock);
+	printf("llame a enqueue\n");
+  struct level *l = procq->levels[p->lvl];
+  
+	acquire(&l->lock);
+	//acquire(&p->lock);	
+  if(l->last == 0){    
+		//printf("encolando 1st\n");
+		//If no elements in queue
+		l->first = p;
+  }else{
+		l->last->next = p;
+	}
+	l->last = p; 
+	//release(&p->lock);
+  release(&l->lock);
 }
 
 struct proc *dequeue(int lvl)
 {
   struct proc *p;
-  struct level *l = procq.levels[lvl];
-  acquire(l->lock);
+  struct level *l = procq->levels[lvl];
+	acquire(&l->lock);
+  //printf("dequeue lvl = %d", lvl);
+	if(l->first == 0){
+		//empty queue
+		//printf(" empty \n"); 
+		release(&l->lock);
+		return 0;
+	}
   p = l->first;
+	//acquire(&p->lock);
   l->first = l->first->next;
   p->next = 0;
-  release(l->lock);
+	//release(&p->lock);
+  release(&l->lock);
+	printf(" No empty %d\n", l->first->next);
   return p;
 }
 
