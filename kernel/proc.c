@@ -129,7 +129,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+	p->next = 0;
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -326,7 +326,8 @@ fork(void)
   acquire(&np->lock);
   //np->state = RUNNABLE;
   //All son process start in level 0
-  make_runnable(np, 0);
+
+	make_runnable(np, 0);
   release(&np->lock);
 
   return pid;
@@ -375,8 +376,7 @@ exit(int status)
   acquire(&wait_lock);
 
   // Give any children to init.
-  reparent(p);
-
+  reparent(p);	
   // Parent might be sleeping in wait().
   wakeup(p->parent);
   
@@ -454,31 +454,29 @@ void
 scheduler(void)
 {
   struct proc *p;
-  struct cpu *c = mycpu();
-  
+  struct cpu *c = mycpu(); 
   c->proc = 0;
   for(;;){
+		//for(p = proc; p < &proc[NPROC]; p++){
+
+		//}
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 		int lvl = 0;
 		do{
-			p = dequeue(lvl);
-			if(p!=0){
+			if((p=dequeue(lvl)) != 0){
 				acquire(&p->lock);
 				if(p->state == RUNNABLE) {
-      		printf("Estoy a punto de ejecutar algo\n");
 					// Switch to chosen process.  It is the process's job
       		// to release its lock and then reacquire it
       		// before jumping back to us.
 					p->state = RUNNING;
       		c->proc = p;
       		swtch(&c->context, &p->context);
-
       		// Process is done running for now.
       		// It should have changed its p->state before coming back.
       		c->proc = 0;
-					printf("DSDADSA\n");
-    		}
+	   		}
 				release(&p->lock);
 			}
 		}while(++lvl < MAXLEVELS && p == 0);
@@ -499,42 +497,44 @@ void mlf_init() {
 
 void enqueue(struct proc *p)
 {
-	printf("llame a enqueue\n");
+	
   struct level *l = procq->levels[p->lvl];
   
 	acquire(&l->lock);
 	//acquire(&p->lock);	
   if(l->last == 0){    
-		//printf("encolando 1st\n");
 		//If no elements in queue
 		l->first = p;
   }else{
 		l->last->next = p;
 	}
 	l->last = p; 
-	//release(&p->lock);
+//	release(&p->lock);
   release(&l->lock);
+
 }
 
 struct proc *dequeue(int lvl)
 {
   struct proc *p;
   struct level *l = procq->levels[lvl];
+		
 	acquire(&l->lock);
-  //printf("dequeue lvl = %d", lvl);
+  
 	if(l->first == 0){
 		//empty queue
-		//printf(" empty \n"); 
+	
 		release(&l->lock);
 		return 0;
 	}
+	
   p = l->first;
-	//acquire(&p->lock);
-  l->first = l->first->next;
+	l->first = l->first->next;
   p->next = 0;
-	//release(&p->lock);
+	if(l->first == 0){
+		l->last = 0;
+	}
   release(&l->lock);
-	printf(" No empty %d\n", l->first->next);
   return p;
 }
 
@@ -550,10 +550,10 @@ void set_priority(struct proc *p, int lvl){
 
 void make_runnable(struct proc *p, int lvl)
 {
+
 	p->state = RUNNABLE;
 	set_priority(p, lvl);
-    //p->level = lvl;
-  enqueue(p);
+	enqueue(p);
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -579,7 +579,8 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
+ 
+	swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
 
@@ -590,7 +591,8 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   //increase level because if p does yield() it used all quantum
-  make_runnable(p, 1); 
+
+	make_runnable(p, 1); 
   sched();
   release(&p->lock);
 }
@@ -659,7 +661,8 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         //p dosnt use all quantum, increese level 
-        make_runnable(p, -1);
+       
+				make_runnable(p, -1);	
       }
       release(&p->lock);
     }
