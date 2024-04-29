@@ -130,6 +130,7 @@ found:
   p->pid = allocpid();
   p->state = USED;
 	p->next = 0;
+  p->tickz = 0;
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -494,7 +495,7 @@ void mlf_init() {
 		procq->levels[i]->quantum = i+1;
 		for(int j = 0; j < NPROC; j++){
     	procq->levels[i]->proces[j] = 0;
-		}
+    }
 	}	
 }
 
@@ -547,21 +548,16 @@ struct proc *dequeue(int lvl)
   return p;
 }
 
-void set_priority(struct proc *p, int lvl){
-  if(p->lvl == 0 && lvl < 0){
-      //do nothing
-  }else if(p->lvl == 3 && lvl > 0){
-      //do nothing
-  }else{
-      p->lvl = lvl == 0? lvl : p->lvl + lvl;
-  }
-}
-
 void make_runnable(struct proc *p, int lvl)
 {
-
 	p->state = RUNNABLE;
-	set_priority(p, lvl);
+  if(p->lvl == 0 && lvl < 0){
+    //do nothing
+  } else if (p->lvl == MAXLEVELS-1 && lvl > 0){
+    //do nothing
+  } else {
+    p->lvl += lvl;
+  }
 	enqueue(p);
 }
 
