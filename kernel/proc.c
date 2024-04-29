@@ -484,14 +484,17 @@ scheduler(void)
 }
 
 void mlf_init() {
-   
 	procq = kalloc();
   //for(struct level *l = *procq->levels; l < procq->levels[MAXLEVELS]; l++){
   for(int i = 0; i < MAXLEVELS; i++){
-    procq->levels[i] = kalloc();
+		procq->levels[i] = kalloc(); 
 		initlock(&procq->levels[i]->lock, "level");
-		procq->levels[i]->first = 0;
-		procq->levels[i]->last = 0;
+		procq->levels[i]->first = -1;
+		procq->levels[i]->last = -1;
+		procq->levels[i]->quantum = i+1;
+		for(int j = 0; j < NPROC; j++){
+    	procq->levels[i]->proces[j] = 0;
+		}
 	}	
 }
 
@@ -502,16 +505,19 @@ void enqueue(struct proc *p)
   
 	acquire(&l->lock);
 	//acquire(&p->lock);	
-  if(l->last == 0){    
-		//If no elements in queue
-		l->first = p;
-  }else{
-		l->last->next = p;
+	if(l->first == -1){
+		l->proces[0] = p;
+		l->first = 0;
+		l->last = 0;
 	}
-	l->last = p; 
-//	release(&p->lock);
-  release(&l->lock);
-
+	else if(l->last == NPROC-1){
+		l->proces[0] = p;
+		l->last = 0;
+	}else{
+		l->last++;
+		l->proces[l->last] = p; 
+	}
+	release(&l->lock);
 }
 
 struct proc *dequeue(int lvl)
@@ -520,19 +526,22 @@ struct proc *dequeue(int lvl)
   struct level *l = procq->levels[lvl];
 		
 	acquire(&l->lock);
-  
-	if(l->first == 0){
+
+	if(l->first == -1){
 		//empty queue
-	
 		release(&l->lock);
 		return 0;
 	}
 	
-  p = l->first;
-	l->first = l->first->next;
-  p->next = 0;
-	if(l->first == 0){
-		l->last = 0;
+	p = l->proces[l->first];
+
+	if(l->first == l->last){
+		l->first = -1;
+		l->last = -1;
+	}else if(l->first == NPROC-1){
+		l->first = 0;
+	}else{
+		l->first++;
 	}
   release(&l->lock);
   return p;

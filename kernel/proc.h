@@ -114,8 +114,10 @@ struct proc {
 
 
 struct level{
-  struct proc *first;
-  struct proc *last;
+  struct proc *proces[NPROC];
+	int first;
+  int last;
+	int quantum;
   struct spinlock lock;
 };
 
