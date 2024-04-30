@@ -88,7 +88,7 @@ struct proc {
   // these are mlf data
   struct proc *next;
   int lvl;
-
+  int timeenq;
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   void *chan;                  // If non-zero, sleeping on chan

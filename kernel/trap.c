@@ -171,6 +171,8 @@ clockintr()
   if((p = myproc())!=0) 
     p->tickz++;
   ticks++;
+  if(ticks % AGINGTIME == 0)
+    aging(); 
   wakeup(&ticks);
   release(&tickslock);
 }

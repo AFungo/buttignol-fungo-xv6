@@ -518,6 +518,7 @@ void enqueue(struct proc *p)
 		l->last++;
 		l->proces[l->last] = p; 
 	}
+  p->timeenq = ticks;
 	release(&l->lock);
 }
 
@@ -559,6 +560,19 @@ void make_runnable(struct proc *p, int lvl)
     p->lvl += lvl;
   }
 	enqueue(p);
+}
+
+void aging(){
+	for(int i = 1; i < MAXLEVELS; i++){
+  	struct level * l = procq->levels[i];
+		if(l->proces[0] != 0){
+    	if(ticks - l->proces[0]->timeenq > QUEUETIME){
+      	struct proc *p = dequeue(i);
+//				p->lvl = 1;
+				make_runnable(p, -1);
+    	}
+  	}
+  }
 }
 
 // Switch to scheduler.  Must hold only p->lock
