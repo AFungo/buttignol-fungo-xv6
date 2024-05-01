@@ -566,7 +566,7 @@ void aging(){
 	for(int i = 1; i < MAXLEVELS; i++){
   	struct level * l = procq->levels[i];
 		if(l->proces[0] != 0){
-    	if(ticks - l->proces[0]->timeenq > QUEUETIME){
+    	if(ticks - l->proces[0]->timeenq > AGINGTIME){
       	struct proc *p = dequeue(i);
 //				p->lvl = 1;
 				make_runnable(p, -1);
