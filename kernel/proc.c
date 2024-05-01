@@ -129,7 +129,6 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-	p->next = 0;
   p->tickz = 0;
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -151,7 +150,6 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-  
   return p;
 }
 
@@ -255,7 +253,6 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  //p->state = RUNNABLE;
 	make_runnable(p, 0);
   release(&p->lock);
 }
@@ -325,9 +322,6 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-  //np->state = RUNNABLE;
-  //All son process start in level 0
-
 	make_runnable(np, 0);
   release(&np->lock);
 
@@ -377,7 +371,7 @@ exit(int status)
   acquire(&wait_lock);
 
   // Give any children to init.
-  reparent(p);	
+  reparent(p);	  
   // Parent might be sleeping in wait().
   wakeup(p->parent);
   
@@ -442,8 +436,103 @@ wait(uint64 addr)
   }
 }
 
+//initialization of multilevel feedback queue
+void mlf_init() {
+	procq = kalloc();
+  for(int i = 0; i < MAXLEVELS; i++){
+		procq->levels[i] = kalloc();
+		initlock(&procq->levels[i]->lock, "level");
+		procq->levels[i]->first = -1;
+		procq->levels[i]->last = -1;
+		procq->levels[i]->quantum = i+1;
+		for(int j = 0; j < NPROC; j++){
+    	procq->levels[i]->processes[j] = 0;
+    }
+	}	
+}
 
-struct proc *dequeue(int lvl);
+// Enqueue the process in mlf
+// It's enqueued in the level allocated in p->lvl
+void enqueue(struct proc *p)
+{	
+  struct level *l = procq->levels[p->lvl];
+  
+	acquire(&l->lock);
+	if(l->first == -1){
+    //empty queue
+		l->processes[0] = p;
+		l->first = 0;
+		l->last = 0;
+	}else if(l->last == NPROC-1){
+		l->processes[0] = p;
+		l->last = 0;
+	}else{
+		l->last++;
+		l->processes[l->last] = p; 
+	}
+  p->tickenq = ticks;
+	release(&l->lock);
+}
+
+//dequeue a process in the respective level
+//if not found return 0
+struct proc *dequeue(int lvl)
+{
+  struct proc *p;
+  struct level *l = procq->levels[lvl];
+		
+	acquire(&l->lock);
+	if(l->first == -1){
+		//empty queue
+		release(&l->lock);
+		return 0;
+	}
+	p = l->processes[l->first];
+	if(l->first == l->last){
+		l->first = -1;
+		l->last = -1;
+	}else if(l->first == NPROC-1){
+		l->first = 0;
+	}else{
+		l->first++;
+	}
+  release(&l->lock);
+  return p;
+}
+
+//Modify the process state to RUNNABLE
+//and increase, decrease or holds the level of the process
+void make_runnable(struct proc *p, int lvl)
+{
+	p->state = RUNNABLE;
+  if(p->lvl == 0 && lvl < 0){
+    //do nothing
+  } else if (p->lvl == MAXLEVELS-1 && lvl > 0){
+    //do nothing
+  } else {
+    p->lvl += lvl;
+  }
+	enqueue(p);
+}
+
+//This function evalueate if the first process of each level
+//must increase its priority. 
+//Depending on how many ticks the process have waited
+//in RUNNABLE state 
+void aging(){
+	for(int i = 1; i < MAXLEVELS; i++){
+  	struct level *l = procq->levels[i];
+    acquire(&l->lock);
+		if(l->processes[0] != 0){
+    	if(ticks - l->processes[0]->tickenq > AGINGTIME){
+      	struct proc *p = dequeue(i);
+				make_runnable(p, -1);
+    	}
+  	}
+    release(&l->lock);
+  }
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -458,9 +547,6 @@ scheduler(void)
   struct cpu *c = mycpu(); 
   c->proc = 0;
   for(;;){
-		//for(p = proc; p < &proc[NPROC]; p++){
-
-		//}
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 		int lvl = 0;
@@ -482,97 +568,6 @@ scheduler(void)
 			}
 		}while(++lvl < MAXLEVELS && p == 0);
 	}
-}
-
-void mlf_init() {
-	procq = kalloc();
-  //for(struct level *l = *procq->levels; l < procq->levels[MAXLEVELS]; l++){
-  for(int i = 0; i < MAXLEVELS; i++){
-		procq->levels[i] = kalloc(); 
-		initlock(&procq->levels[i]->lock, "level");
-		procq->levels[i]->first = -1;
-		procq->levels[i]->last = -1;
-		procq->levels[i]->quantum = i+1;
-		for(int j = 0; j < NPROC; j++){
-    	procq->levels[i]->proces[j] = 0;
-    }
-	}	
-}
-
-void enqueue(struct proc *p)
-{
-	
-  struct level *l = procq->levels[p->lvl];
-  
-	acquire(&l->lock);
-	//acquire(&p->lock);	
-	if(l->first == -1){
-		l->proces[0] = p;
-		l->first = 0;
-		l->last = 0;
-	}
-	else if(l->last == NPROC-1){
-		l->proces[0] = p;
-		l->last = 0;
-	}else{
-		l->last++;
-		l->proces[l->last] = p; 
-	}
-  p->timeenq = ticks;
-	release(&l->lock);
-}
-
-struct proc *dequeue(int lvl)
-{
-  struct proc *p;
-  struct level *l = procq->levels[lvl];
-		
-	acquire(&l->lock);
-
-	if(l->first == -1){
-		//empty queue
-		release(&l->lock);
-		return 0;
-	}
-	
-	p = l->proces[l->first];
-
-	if(l->first == l->last){
-		l->first = -1;
-		l->last = -1;
-	}else if(l->first == NPROC-1){
-		l->first = 0;
-	}else{
-		l->first++;
-	}
-  release(&l->lock);
-  return p;
-}
-
-void make_runnable(struct proc *p, int lvl)
-{
-	p->state = RUNNABLE;
-  if(p->lvl == 0 && lvl < 0){
-    //do nothing
-  } else if (p->lvl == MAXLEVELS-1 && lvl > 0){
-    //do nothing
-  } else {
-    p->lvl += lvl;
-  }
-	enqueue(p);
-}
-
-void aging(){
-	for(int i = 1; i < MAXLEVELS; i++){
-  	struct level * l = procq->levels[i];
-		if(l->proces[0] != 0){
-    	if(ticks - l->proces[0]->timeenq > AGINGTIME){
-      	struct proc *p = dequeue(i);
-//				p->lvl = 1;
-				make_runnable(p, -1);
-    	}
-  	}
-  }
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -598,7 +593,6 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
- 
 	swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
@@ -609,8 +603,6 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  //increase level because if p does yield() it used all quantum
-
 	make_runnable(p, 1); 
   sched();
   release(&p->lock);
@@ -679,8 +671,6 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
-        //p dosnt use all quantum, increese level 
-       
 				make_runnable(p, -1);	
       }
       release(&p->lock);
@@ -702,8 +692,7 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
-        make_runnable(p, 0);//Deberia tener prioridad 0 no?
-        //p->state = RUNNABLE;
+        make_runnable(p, 0);
       }
       release(&p->lock);
       return 0;

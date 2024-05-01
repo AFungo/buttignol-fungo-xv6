@@ -86,16 +86,16 @@ struct proc {
   struct spinlock lock;
 
   // these are mlf data
-  struct proc *next;
-  int lvl;
-  int timeenq;
+  int lvl;                     // queue level
+  int tickenq;                 // enqueued tick
+
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  int tickz;
+  int tickz;                   // time during RUNNING state
 
 
   // wait_lock must be held when using this:
@@ -110,21 +110,18 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-
 };
 
-
-
 struct level{
-  struct proc *proces[NPROC];
-	int first;
-  int last;
-	int quantum;
-  struct spinlock lock;
+  struct proc *processes[NPROC];  // processes list
+	int first;                    // first process in queue
+  int last;                     // last process in queue
+	int quantum;                  // quantum on level 
+  struct spinlock lock;         // level lock
 };
 
 struct mlf{
-  struct level *levels[MAXLEVELS];
+  struct level *levels[MAXLEVELS];  //levels of multi level feedback queue
 };
 
-extern struct mlf *procq;
+extern struct mlf *procq;       // global processes mlf queue

@@ -75,7 +75,6 @@ usertrap(void)
 
   if(killed(p))
     exit(-1);
-  
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
     if (procq->levels[p->lvl]->quantum == ++p->tickz)

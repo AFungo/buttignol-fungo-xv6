@@ -11,5 +11,5 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
-#define MAXLEVELS    4 		 // Max amount of levels for mlf
-#define AGINGTIME    5000 //Max time in queue
+#define MAXLEVELS    4 	   // Max amount of levels for mlf
+#define AGINGTIME    1000  // Max time in queue
