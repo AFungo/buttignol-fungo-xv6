@@ -16,6 +16,7 @@ void kernelvec();
 
 extern int devintr();
 
+extern void aging(void);
 void
 trapinit(void)
 {
@@ -77,8 +78,10 @@ usertrap(void)
     exit(-1);
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
-    if (procq->levels[p->lvl]->quantum == ++p->tickz)
+    if (p->lvl+1 == ++p->tickz){
+      //p->lvl+1 has the quantum of that level
       yield();
+    }
   } 
 
   usertrapret();

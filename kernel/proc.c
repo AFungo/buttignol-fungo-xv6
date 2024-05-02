@@ -26,10 +26,21 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
-struct mlf *procq;
-
 //make a process runnable
 extern void make_runnable(struct proc *p, int lvl);
+
+
+struct level{
+   struct proc *first;            // first process in queue
+   struct proc *last;             // last process in queue
+   struct spinlock lock;          // level lock
+};
+ 
+struct mlf{
+   struct level levels[MAXLEVELS];//levels of multi level feedback queue
+};
+
+struct mlf procq;									// global processes mlf queue
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -60,8 +71,17 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
-  }
+  		p->next = 0;
+	}
+
+  for(int i = 0; i < MAXLEVELS; i++){
+		//initialization of multilevel feedback queue
+		initlock(&procq.levels[i].lock, "level");
+		procq.levels[i].first = 0;
+		procq.levels[i].last = 0;
+	}	
 }
+
 
 // Must be called with interrupts disabled,
 // to prevent race with process being moved
@@ -437,40 +457,20 @@ wait(uint64 addr)
   }
 }
 
-//initialization of multilevel feedback queue
-void mlf_init() {
-	procq = kalloc();
-  for(int i = 0; i < MAXLEVELS; i++){
-		procq->levels[i] = kalloc();
-		initlock(&procq->levels[i]->lock, "level");
-		procq->levels[i]->first = -1;
-		procq->levels[i]->last = -1;
-		procq->levels[i]->quantum = i+1;
-		for(int j = 0; j < NPROC; j++){
-    	procq->levels[i]->processes[j] = 0;
-    }
-	}	
-}
-
 // Enqueue the process in mlf
 // It's enqueued in the level allocated in p->lvl
 void enqueue(struct proc *p)
 {	
-  struct level *l = procq->levels[p->lvl];
+  struct level *l = &procq.levels[p->lvl];
   
 	acquire(&l->lock);
-	if(l->first == -1){
-    //empty queue
-		l->processes[0] = p;
-		l->first = 0;
-		l->last = 0;
-	}else if(l->last == NPROC-1){
-		l->processes[0] = p;
-		l->last = 0;
+	if(l->first == 0){
+    //empty queue	
+		l->first = p;
 	}else{
-		l->last++;
-		l->processes[l->last] = p; 
+		l->last->next = p;
 	}
+	l->last = p;
   p->tickenq = ticks;
 	release(&l->lock);
 }
@@ -480,25 +480,22 @@ void enqueue(struct proc *p)
 struct proc *dequeue(int lvl)
 {
   struct proc *p;
-  struct level *l = procq->levels[lvl];
-		
+  struct level *l = &procq.levels[lvl];
 	acquire(&l->lock);
-	if(l->first == -1){
+	if(l->first == 0){
 		//empty queue
 		release(&l->lock);
 		return 0;
+	}  
+	p = l->first;
+	acquire(&p->lock);
+	l->first = p->next;
+	if(l->first == 0){
+		l->last = 0;
 	}
-	p = l->processes[l->first];
-	if(l->first == l->last){
-		l->first = -1;
-		l->last = -1;
-	}else if(l->first == NPROC-1){
-		l->first = 0;
-	}else{
-		l->first++;
-	}
+	p->next = 0;
   release(&l->lock);
-  return p;
+	return p;
 }
 
 //Modify the process state to RUNNABLE
@@ -522,15 +519,16 @@ void make_runnable(struct proc *p, int lvl)
 //in RUNNABLE state 
 void aging(){
 	for(int i = 1; i < MAXLEVELS; i++){
-  	struct level *l = procq->levels[i];
-    acquire(&l->lock);
-		if(l->processes[0] != 0){
-    	if(ticks - l->processes[0]->tickenq > AGINGTIME){
+  	struct level l = procq.levels[i];
+    acquire(&l.lock);
+		if(l.first != 0){
+    	if(ticks - l.first->tickenq > AGINGTIME){
       	struct proc *p = dequeue(i);
 				make_runnable(p, -1);
+				release(&p->lock);
     	}
   	}
-    release(&l->lock);
+    release(&l.lock);
   }
 }
 
@@ -550,10 +548,8 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-		int lvl = 0;
-		do{
+		for(int lvl = 0; lvl < MAXLEVELS; lvl++){
 			if((p=dequeue(lvl)) != 0){
-				acquire(&p->lock);
 				if(p->state == RUNNABLE) {
 					// Switch to chosen process.  It is the process's job
       		// to release its lock and then reacquire it
@@ -564,10 +560,12 @@ scheduler(void)
       		// Process is done running for now.
       		// It should have changed its p->state before coming back.
       		c->proc = 0;
-	   		}
+					release(&p->lock);
+					break;
+				}
 				release(&p->lock);
 			}
-		}while(++lvl < MAXLEVELS && p == 0);
+		}
 	}
 }
 

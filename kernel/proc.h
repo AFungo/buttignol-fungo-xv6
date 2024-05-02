@@ -88,6 +88,7 @@ struct proc {
   // these are mlf data
   int lvl;                     // queue level
   int tickenq;                 // enqueued tick
+	struct proc *next;
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state
@@ -112,16 +113,3 @@ struct proc {
   char name[16];               // Process name (debugging)
 };
 
-struct level{
-  struct proc *processes[NPROC];  // processes list
-	int first;                    // first process in queue
-  int last;                     // last process in queue
-	int quantum;                  // quantum on level 
-  struct spinlock lock;         // level lock
-};
-
-struct mlf{
-  struct level *levels[MAXLEVELS];  //levels of multi level feedback queue
-};
-
-extern struct mlf *procq;       // global processes mlf queue
