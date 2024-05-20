@@ -85,19 +85,12 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
 
-  // these are mlf data
-  int lvl;                     // queue level
-  int tickenq;                 // enqueued tick
-	struct proc *next;
-
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  int tickz;                   // time during RUNNING state
-
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
@@ -112,4 +105,3 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
-

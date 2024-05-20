@@ -26,22 +26,6 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
-//make a process runnable
-extern void make_runnable(struct proc *p, int lvl);
-
-
-struct level{
-   struct proc *first;            // first process in queue
-   struct proc *last;             // last process in queue
-   struct spinlock lock;          // level lock
-};
- 
-struct mlf{
-   struct level levels[MAXLEVELS];//levels of multi level feedback queue
-};
-
-struct mlf procq;									// global processes mlf queue
-
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -71,17 +55,8 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
-  		p->next = 0;
-	}
-
-  for(int i = 0; i < MAXLEVELS; i++){
-		//initialization of multilevel feedback queue
-		initlock(&procq.levels[i].lock, "level");
-		procq.levels[i].first = 0;
-		procq.levels[i].last = 0;
-	}	
+  }
 }
-
 
 // Must be called with interrupts disabled,
 // to prevent race with process being moved
@@ -149,7 +124,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-  p->tickz = 0;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -170,6 +145,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
   return p;
 }
 
@@ -273,7 +249,8 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-	make_runnable(p, 0);
+  p->state = RUNNABLE;
+
   release(&p->lock);
 }
 
@@ -342,7 +319,7 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-	make_runnable(np, 0);
+  np->state = RUNNABLE;
   release(&np->lock);
 
   return pid;
@@ -391,7 +368,7 @@ exit(int status)
   acquire(&wait_lock);
 
   // Give any children to init.
-  reparent(p);	
+  reparent(p);
 
   // Parent might be sleeping in wait().
   wakeup(p->parent);
@@ -457,81 +434,6 @@ wait(uint64 addr)
   }
 }
 
-// Enqueue the process in mlf
-// It's enqueued in the level allocated in p->lvl
-void enqueue(struct proc *p)
-{	
-  struct level *l = &procq.levels[p->lvl];
-  
-	acquire(&l->lock);
-	if(l->first == 0){
-    //empty queue	
-		l->first = p;
-	}else{
-		l->last->next = p;
-	}
-	l->last = p;
-  p->tickenq = ticks;
-	release(&l->lock);
-}
-
-//dequeue a process in the respective level
-//if not found return 0
-struct proc *dequeue(int lvl)
-{
-  struct proc *p;
-  struct level *l = &procq.levels[lvl];
-	acquire(&l->lock);
-	if(l->first == 0){
-		//empty queue
-		release(&l->lock);
-		return 0;
-	}  
-	p = l->first;
-	acquire(&p->lock);
-	l->first = p->next;
-	if(l->first == 0){
-		l->last = 0;
-	}
-	p->next = 0;
-  release(&l->lock);
-	return p;
-}
-
-//Modify the process state to RUNNABLE
-//and increase, decrease or holds the level of the process
-void make_runnable(struct proc *p, int lvl)
-{
-	p->state = RUNNABLE;
-  if(p->lvl == 0 && lvl < 0){
-    //do nothing
-  } else if (p->lvl == MAXLEVELS-1 && lvl > 0){
-    //do nothing
-  } else {
-    p->lvl += lvl;
-  }
-	enqueue(p);
-}
-
-//This function evalueate if the first process of each level
-//must increase its priority. 
-//Depending on how many ticks the process have waited
-//in RUNNABLE state 
-void aging(){
-	for(int i = 1; i < MAXLEVELS; i++){
-  	struct level l = procq.levels[i];
-    acquire(&l.lock);
-		if(l.first != 0){
-    	if(ticks - l.first->tickenq > AGINGTIME){
-      	struct proc *p = dequeue(i);
-				make_runnable(p, -1);
-				release(&p->lock);
-    	}
-  	}
-    release(&l.lock);
-  }
-}
-
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -543,30 +445,30 @@ void
 scheduler(void)
 {
   struct proc *p;
-  struct cpu *c = mycpu(); 
+  struct cpu *c = mycpu();
+  
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-		for(int lvl = 0; lvl < MAXLEVELS; lvl++){
-			if((p=dequeue(lvl)) != 0){
-				if(p->state == RUNNABLE) {
-					// Switch to chosen process.  It is the process's job
-      		// to release its lock and then reacquire it
-      		// before jumping back to us.
-					p->state = RUNNING;
-      		c->proc = p;
-      		swtch(&c->context, &p->context);
-      		// Process is done running for now.
-      		// It should have changed its p->state before coming back.
-      		c->proc = 0;
-					release(&p->lock);
-					break;
-				}
-				release(&p->lock);
-			}
-		}
-	}
+
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE) {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }
+      release(&p->lock);
+    }
+  }
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -592,7 +494,7 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-	swtch(&p->context, &mycpu()->context);
+  swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
 
@@ -602,7 +504,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-	make_runnable(p, 1); 
+  p->state = RUNNABLE;
   sched();
   release(&p->lock);
 }
@@ -670,7 +572,7 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
-				make_runnable(p, -1);	
+        p->state = RUNNABLE;
       }
       release(&p->lock);
     }
@@ -691,7 +593,7 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
-        make_runnable(p, 0);
+        p->state = RUNNABLE;
       }
       release(&p->lock);
       return 0;

@@ -16,7 +16,6 @@ void kernelvec();
 
 extern int devintr();
 
-extern void aging(void);
 void
 trapinit(void)
 {
@@ -76,13 +75,10 @@ usertrap(void)
 
   if(killed(p))
     exit(-1);
+
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2) {
-    if (p->lvl+1 == ++p->tickz){
-      //p->lvl+1 has the quantum of that level
-      yield();
-    }
-  } 
+  if(which_dev == 2)
+    yield();
 
   usertrapret();
 }
@@ -167,14 +163,8 @@ kerneltrap()
 void
 clockintr()
 {
-  struct proc *p;
-
   acquire(&tickslock);
-  if((p = myproc())!=0) 
-    p->tickz++;
   ticks++;
-  if(ticks % AGINGTIME == 0)
-    aging(); 
   wakeup(&ticks);
   release(&tickslock);
 }
