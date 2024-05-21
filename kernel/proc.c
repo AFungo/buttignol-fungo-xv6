@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+// #include "semaphore.c"
 
 struct cpu cpus[NCPU];
 
@@ -359,6 +360,14 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+	// Close all open semaphores
+	for(int sd = 0; sd < NSEMP; sd++){
+		if(p->osems[sd] != 0){
+			semclose(sd);
+			p->osems[sd] = 0;
+		}
+	}
 
   begin_op();
   iput(p->cwd);

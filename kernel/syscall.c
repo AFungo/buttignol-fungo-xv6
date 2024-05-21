@@ -6,7 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
-
+#include "syssemaphore.c"
 // Fetch the uint64 at addr from the current process.
 int
 fetchaddr(uint64 addr, uint64 *ip)
@@ -101,6 +101,12 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_semcreate(void);
+extern uint64 sys_semget(void);
+extern uint64 sys_semsignal(void);
+extern uint64 sys_semwait(void);
+extern uint64 sys_semclose(void);
+
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
