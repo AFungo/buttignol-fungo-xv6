@@ -28,10 +28,10 @@ seminit(void)
 }
 
 int
-alloc_sem_proc()
+alloc_sem_proc(struct proc* p)
 {
 	int i;
-	for(i = 0; i<NSEMP && myproc()->osems[i] != 0; i++);
+	for(i = 0; i<NSEMP && p->osems[i] != 0; i++);
 	
 	//Process semaphore table is full
 	if(i == NSEMP)
@@ -52,24 +52,28 @@ semcreate(int key, int value)
 		return -1;
 
 	//semaphore descriptor
-	int sd;
-	if((sd = alloc_sem_proc()) == -1) 
-		return -1;
 	
+	int sd;
+	struct proc* p = myproc();
+	if((sd = alloc_sem_proc(p)) == -1) 
+		return -1;
+
+
 	//ciclar hasta que haya un semaforo libre
 	struct semaphore *free_sem = 0;
 	for(struct semaphore *sem = semtable; sem < &semtable[NSEM]; sem++)
 	{	
 		//duplicated key
-		if(sem->key == key)
+		if(sem->key == key && sem->ref_count > 0)
 		{
-			if (free_sem != 0)
-				release(&sem->lock);
+			if (free_sem != 0) {
+				release(&free_sem->lock);
+			}
 			return -1;
 		}
 		if(free_sem == 0 && sem->ref_count == 0){
 			acquire(&sem->lock);
-			free_sem = sem;
+			free_sem = sem; 
 		}
 	}
   //semaphore table is full
@@ -79,9 +83,9 @@ semcreate(int key, int value)
 	free_sem->value = value;
 	free_sem->key = key;
 	free_sem->ref_count = 1;
+	p->osems[sd] = free_sem;
 
 	release(&free_sem->lock);
-	myproc()->osems[sd] = free_sem;
 
 	return sd;
 }
@@ -90,23 +94,28 @@ int
 semget(int key)
 {
 	struct proc* p = myproc();
+	int sd = alloc_sem_proc(p);
+	if (sd == -1)
+		return -1;
 	
 	for(int i = 0; i < NSEMP; i++)
 	{
-		struct semaphore sem = semtable[i];
-		acquire(&sem.lock);
-		if(sem.key == key){
-			int sd = alloc_sem_proc();
-			p->osems[sd] = &sem;
+		struct semaphore* currentsem = &semtable[i];
+		acquire(&currentsem->lock);
+		if(currentsem->key == key && currentsem->ref_count > 0){
+			currentsem->ref_count++;
+			p->osems[sd] = currentsem;
+			release(&currentsem->lock);
+			return sd;
 		}
-		release(&sem.lock);
+		release(&currentsem->lock);
 	}
 	return -1;
 }
 
 int
 semsignal(int sem_idx) {
-	if(sem_idx < 0 || sem_idx > NSEMP)
+	if(sem_idx < 0 || sem_idx >= NSEMP)
 		return -1;
 	struct semaphore *sem = myproc()->osems[sem_idx];
 	//check if semaphore exists
@@ -122,13 +131,13 @@ semsignal(int sem_idx) {
 int
 semwait(int sem_idx)
 {	
-	if(sem_idx < 0 || sem_idx > NSEMP)
+	if(sem_idx < 0 || sem_idx >= NSEMP)
 		return -1;
 	struct semaphore *sem = myproc()->osems[sem_idx];
 	//check if semaphore exists
 	if(sem == 0)
 		return -1;
-	acquire(&sem->lock);//preguntar al marcelo
+	acquire(&sem->lock);
 	while(sem->value == 0)
 		sleep(sem, &sem->lock);
 	sem->value--;
@@ -139,17 +148,22 @@ semwait(int sem_idx)
 int
 semclose(int sem_idx)
 {
-	if(sem_idx < 0 || sem_idx > NSEMP)
+	if(sem_idx < 0 || sem_idx >= NSEMP)
 		return -1;
-	struct semaphore *sem = myproc()->osems[sem_idx];
+
+	struct proc * p = myproc();
+	struct semaphore *sem = p->osems[sem_idx];
 	//check if semaphore exists
 	if(sem == 0)
 		return -1;
 	
 	acquire(&sem->lock);
 	sem->ref_count--;
+	if(sem->ref_count == 0) {
+		printf("Closing semaphore %d\n", sem_idx);
+	}
 	release(&sem->lock);
 	
-	myproc()->osems[sem_idx] = 0;
+	p->osems[sem_idx] = 0;
 	return 0;
 }
