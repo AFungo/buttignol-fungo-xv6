@@ -17,7 +17,6 @@ struct semaphore semtable[NSEM];
 void
 seminit(void)
 {
-	// for(struct semaphore *s = semtable;	s < &semtable[NSEM]; s++)
 	for(int i = 0; i < NSEM; i++)
 	{
 		semtable[i].value = 0;
@@ -51,15 +50,13 @@ semcreate(int key, int value)
 	if(value < 0)
 		return -1;
 
-	//semaphore descriptor
-	
-	int sd;
 	struct proc* p = myproc();
-	if((sd = alloc_sem_proc(p)) == -1) 
+	//semaphore descriptor
+	int sd = alloc_sem_proc(p);
+	//process semaphore table is full
+	if(sd == -1) 
 		return -1;
 
-
-	//ciclar hasta que haya un semaforo libre
 	struct semaphore *free_sem = 0;
 	for(struct semaphore *sem = semtable; sem < &semtable[NSEM]; sem++)
 	{	
@@ -76,7 +73,7 @@ semcreate(int key, int value)
 			free_sem = sem; 
 		}
 	}
-  //semaphore table is full
+  	//semaphore table is full
 	if(free_sem == 0) 
 		return -1;
 
