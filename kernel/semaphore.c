@@ -63,18 +63,18 @@ semcreate(int key, int value)
 		//duplicated key
 		if(sem->key == key && sem->ref_count > 0)
 		{
-			if (free_sem != 0) {
+			if (free_sem) {
 				release(&free_sem->lock);
 			}
 			return -1;
 		}
-		if(free_sem == 0 && sem->ref_count == 0){
+		if(!free_sem && sem->ref_count == 0){
 			acquire(&sem->lock);
 			free_sem = sem; 
 		}
 	}
   	//semaphore table is full
-	if(free_sem == 0) 
+	if(!free_sem) 
 		return -1;
 
 	free_sem->value = value;
@@ -111,12 +111,12 @@ semget(int key)
 }
 
 int
-semsignal(int sem_idx) {
-	if(sem_idx < 0 || sem_idx >= NSEMP)
+semsignal(int sd) {
+	if(sd < 0 || sd >= NSEMP)
 		return -1;
-	struct semaphore *sem = myproc()->osems[sem_idx];
+	struct semaphore *sem = myproc()->osems[sd];
 	//check if semaphore exists
-	if(sem == 0)
+	if(!sem)
 		return -1;
 	acquire(&sem->lock);
 	sem->value++;
@@ -126,13 +126,13 @@ semsignal(int sem_idx) {
 }
 
 int
-semwait(int sem_idx)
+semwait(int sd)
 {	
-	if(sem_idx < 0 || sem_idx >= NSEMP)
+	if(sd < 0 || sd >= NSEMP)
 		return -1;
-	struct semaphore *sem = myproc()->osems[sem_idx];
+	struct semaphore *sem = myproc()->osems[sd];
 	//check if semaphore exists
-	if(sem == 0)
+	if(!sem)
 		return -1;
 	acquire(&sem->lock);
 	while(sem->value == 0)
@@ -143,24 +143,21 @@ semwait(int sem_idx)
 }
 
 int
-semclose(int sem_idx)
+semclose(int sd)
 {
-	if(sem_idx < 0 || sem_idx >= NSEMP)
+	if(sd < 0 || sd >= NSEMP)
 		return -1;
 
 	struct proc * p = myproc();
-	struct semaphore *sem = p->osems[sem_idx];
+	struct semaphore *sem = p->osems[sd];
 	//check if semaphore exists
-	if(sem == 0)
+	if(!sem)
 		return -1;
 	
 	acquire(&sem->lock);
 	sem->ref_count--;
-	if(sem->ref_count == 0) {
-		printf("Closing semaphore %d\n", sem_idx);
-	}
 	release(&sem->lock);
 	
-	p->osems[sem_idx] = 0;
+	p->osems[sd] = 0;
 	return 0;
 }
