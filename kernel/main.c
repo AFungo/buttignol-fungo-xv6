@@ -3,7 +3,6 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
-// #include "semaphore.c"
 
 volatile static int started = 0;
 

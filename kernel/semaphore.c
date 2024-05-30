@@ -17,8 +17,7 @@ struct semaphore semtable[NSEM];
 void
 seminit(void)
 {
-	for(int i = 0; i < NSEM; i++)
-	{
+	for(int i = 0; i < NSEM; i++){
 		semtable[i].value = 0;
 		semtable[i].key = -1;
 		semtable[i].ref_count = 0;
@@ -58,8 +57,7 @@ semcreate(int key, int value)
 		return -1;
 
 	struct semaphore *free_sem = 0;
-	for(struct semaphore *sem = semtable; sem < &semtable[NSEM]; sem++)
-	{	
+	for(struct semaphore *sem = semtable; sem < &semtable[NSEM]; sem++){	
 		//duplicated key
 		if(sem->key == key && sem->ref_count > 0)
 		{
@@ -95,8 +93,7 @@ semget(int key)
 	if (sd == -1)
 		return -1;
 	
-	for(int i = 0; i < NSEMP; i++)
-	{
+	for(int i = 0; i < NSEMP; i++){
 		struct semaphore* currentsem = &semtable[i];
 		acquire(&currentsem->lock);
 		if(currentsem->key == key && currentsem->ref_count > 0){

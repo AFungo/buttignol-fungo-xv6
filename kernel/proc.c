@@ -5,7 +5,6 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-// #include "semaphore.c"
 
 struct cpu cpus[NCPU];
 
