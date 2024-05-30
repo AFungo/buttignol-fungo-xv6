@@ -126,11 +126,6 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
-[SYS_semcreate]	sys_semcreate,
-[SYS_semget]	sys_semget,
-[SYS_semsignal]	sys_semsignal,
-[SYS_semwait]	sys_semwait,
-[SYS_semclose]	sys_semclose
 };
 
 void
