@@ -50,7 +50,9 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
+  int scause = r_scause();
+
+  if(scause == 8){
     // system call
 
     if(killed(p))
@@ -65,10 +67,22 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } else if (scause == 12 || scause == 13 || scause == 15) { 
+    int stval = r_stval();
+    if (stval < p->sz && stval > p->sz - MAXSTACKSIZE*PGSIZE) {
+      int dest = PGROUNDDOWN(stval);
+      int sp = PGROUNDUP(p->trapframe->sp);
+      uvmalloc(p->pagetable, dest, sp, PTE_W);
+    } else {
+      printf("usertrap(): Stack Overflow scause %p pid=%d\n", scause, p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      setkilled(p);      
+    }
+
+  }else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+    printf("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
   }
