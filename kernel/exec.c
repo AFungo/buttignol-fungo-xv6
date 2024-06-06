@@ -79,8 +79,9 @@ exec(char *path, char **argv)
   // Make the first inaccessible as a stack guard.
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
+  p->brk = sz+PGSIZE;
   uint64 sz1;
-  if((sz1 = uvmalloc(pagetable, sz+(MAXSTACKSIZE)*PGSIZE, sz + (MAXSTACKSIZE+1)*PGSIZE, PTE_W)) == 0)
+  if((sz1 = uvmalloc(pagetable, sz+(MAXSTACKSIZE-1)*PGSIZE, sz + MAXSTACKSIZE*PGSIZE, PTE_W)) == 0)
     goto bad;
   sz = sz1;
   sp = sz;

@@ -69,13 +69,12 @@ usertrap(void)
     syscall();
   } else if (scause == 12 || scause == 13 || scause == 15) { 
     int stval = r_stval();
-    if (stval < p->sz && stval > p->sz - MAXSTACKSIZE*PGSIZE) {
+    if (stval < p->sz && stval > p->brk) {
       int dest = PGROUNDDOWN(stval);
-      int sp = PGROUNDUP(p->trapframe->sp);
-      uvmalloc(p->pagetable, dest, sp, PTE_W);
+      uvmalloc(p->pagetable, dest, dest+PGSIZE, PTE_W);
     } else {
-      printf("usertrap(): Stack Overflow scause %p pid=%d\n", scause, p->pid);
-      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      printf("usertrap(): stack overflow\n");
+      printf("            stval=%p pid=%d\n", stval, p->pid);
       setkilled(p);      
     }
 
