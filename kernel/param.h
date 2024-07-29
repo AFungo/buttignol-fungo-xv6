@@ -13,3 +13,4 @@
 #define MAXPATH      128   // maximum file path name
 #define NSHM         64    // maximum shared memory pages
 #define NSHMPROC     8     // maximum shared memory pages per process
+#define NPAB         5     // maximum number physical memory addresses per shared memory
