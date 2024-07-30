@@ -83,7 +83,7 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct procshm{
 	uint64 va;
-	int shmemindex;
+	struct shmem *shm;
   struct spinlock lock; 
 };
 
