@@ -4,7 +4,7 @@
 #include "kernel/fcntl.h"
 
 int main(void) {
-    void* addr = 0; // Use a single pointer for the address
+    int* addr = 0; // Use a single pointer for the address
     int shmd = shm_get(5, 4096, &addr); // Get the shared memory ID and map the memory
 
     if (shmd < 0) {
@@ -15,7 +15,7 @@ int main(void) {
     printf("Shared memory id: %d\n", shmd);
     printf("Shared memory address: %p\n", &addr);
 
-    // Store values in the shared memory
+    // Store values in the scharhared memory
     int* int_ptr = (int*)&addr;
     *int_ptr = 42; // Store an integer value
     printf("Stored value: %d\n", *int_ptr);

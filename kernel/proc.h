@@ -84,7 +84,6 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct procshm{
 	uint64 va;
 	struct shmem *shm;
-  struct spinlock lock; 
 };
 
 // Per-process state
