@@ -16,7 +16,7 @@ struct shmem
 
 struct shmem shmemtable[NSHM];
 
-void shm_init(void)
+void shminit(void)
 {
 	for(int i = 0; i < NSHM; i++){
 		shmemtable[i].key = -1;
@@ -26,9 +26,10 @@ void shm_init(void)
 	}
 }
 
-int shm_get(int key, int size, void **addr)
-{
+struct shmem* find_shm(int key){
+	
 	struct shmem *shm = 0;
+	
 	for(struct shmem *curr_shm = shmemtable; curr_shm < &shmemtable[NSHM]; curr_shm++){
 		// duplicated key
 		if(curr_shm->key == key && curr_shm->refcount > 0){
@@ -42,68 +43,80 @@ int shm_get(int key, int size, void **addr)
 		if(!shm && curr_shm->refcount == 0){
 			acquire(&curr_shm->lock);
 			shm = curr_shm;
-			// break;?
+			// break;
 		}
 	}
+	return shm;
 
-	// shared memory table is full
-	if (!shm)
-		return -1;
+}
+
+int alloc_procshm(struct procshm** pshm){
 
 	struct proc *p = myproc();
 	int shmd = -1;
-	struct procshm *pshm = 0;
-
+	
 	for(int i = 0; i < NSHMPROC; i++){
 		// find a free prosition
-		acquire(&p->oshm[i]->lock);
-		// Esta es la manera correcta de ver si esta libre la posicion en el arreglo del proceso?
 		if(!p->oshm[i]->shm){
 			shmd = i;
-			pshm = p->oshm[i];
+			*pshm = p->oshm[i];
 			break;
 		}
-		release(&p->oshm[i]->lock);
 	}
 
-	if(shmd == -1){
-		release(&shm->lock);
+	return shmd;
+}
+
+int shm_get(int key, int size, void **addr)
+{
+	
+	if(size/PGSIZE > NPAB)
 		return -1;
-	}
 
-	int pa;
+	struct procshm *pshm = 0;
+	int shmd = alloc_procshm(&pshm);
+
+	if(shmd == -1)
+		return -1;
+	
+
+	struct shmem *shm = find_shm(key);
+	// shared memory table is ful
+	if (!shm)
+		return -1;
+	
+	struct proc *p = myproc();
+
+	uint64 pa;
 	uint64 oldsize = p->sz;
-	int i = 0;
-
+	
+	int i = 0;	
 	for(int a = oldsize; a < p->sz; a += PGSIZE){
-		if(i >= NPAB){	// Chequeo previo.
-			release(&shm->lock);
-			release(&pshm->lock);
-			return -1;
-		}
 		// Esto nos permite sacar el uvmalloc de más arriba.
-		// if (refcount == 0) {
-			// pa = kalloc();
-			// shm->pa[i] = pa;
-		//}
-		// else
-			// pa = shm->pa[i];
-
-		// mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W);
+		if (shm->refcount == 0) {
+			pa = (uint64)kalloc();
+			if(pa == 0){
+				uvmunmap(p->pagetable, oldsize, a-oldsize-PGSIZE, 1);
+				release(&shm->lock);
+				return -1;
+			}
+			shm->pa[i] = pa;
+		}else{
+			pa = shm->pa[i];
+		}
+		mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W);
 		i++;
 		p->sz+=PGSIZE;
 	}
 	shm->refcount++;
 
-	pshm->va = (uint64) &addr;
-	pshm->shm = shm; 
-	//p->oshm[shmd]->va = (uint64) &addr;void*a
 
-	//p->oshm[shmd]->shm = shm;
 	release(&shm->lock);
-	release(&pshm->lock);
-
-	copyout(p->pagetable, addr, &oldsize, sizeof(oldsize));
+  
+  copyout(p->pagetable, (uint64)(*addr), (char*)&oldsize, sizeof(oldsize));
+	
+	pshm->va = (uint64) addr;
+	pshm->shm = shm; 
 	return shmd;
 }
 
