@@ -50,14 +50,14 @@ struct shmem* find_shm(int key){
 
 }
 
-int alloc_procshm(struct procshm** pshm){
+int alloc_procshm(struct procshm* pshm){
 
 	struct proc *p = myproc();
 	int shmd = -1;
-	
 	for(int i = 0; i < NSHMPROC; i++){
 		// find a free prosition
-		if(!p->oshm[i]->shm){
+		struct procshm oshm = p->oshm[i];
+		if(!oshm.shm){
 			shmd = i;
 			*pshm = p->oshm[i];
 			break;
@@ -69,54 +69,52 @@ int alloc_procshm(struct procshm** pshm){
 
 int shm_get(int key, int size, void **addr)
 {
-	
+
 	if(size/PGSIZE > NPAB)
 		return -1;
 
-	struct procshm *pshm = 0;
+	struct procshm pshm;
 	int shmd = alloc_procshm(&pshm);
-
 	if(shmd == -1)
 		return -1;
 	
-
 	struct shmem *shm = find_shm(key);
-	// shared memory table is ful
 	if (!shm)
 		return -1;
 	
 	struct proc *p = myproc();
-
-	uint64 pa;
+	char* pa;
 	uint64 oldsize = p->sz;
-	
 	int i = 0;	
 	for(int a = oldsize; a < p->sz; a += PGSIZE){
-		// Esto nos permite sacar el uvmalloc de más arriba.
 		if (shm->refcount == 0) {
-			pa = (uint64)kalloc();
+			pa = kalloc();
 			if(pa == 0){
-				uvmunmap(p->pagetable, oldsize, a-oldsize-PGSIZE, 1);
+				p->sz = uvmdealloc(p->pagetable, a, oldsize);
 				release(&shm->lock);
 				return -1;
 			}
-			shm->pa[i] = pa;
+			shm->pa[i] = (uint64) pa;
 		}else{
-			pa = shm->pa[i];
+			pa = (char*) shm->pa[i];
 		}
-		mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W);
+		if(mappages(p->pagetable, a, PGSIZE, (uint64)pa, PTE_R|PTE_U|PTE_W) != 0){
+			kfree(pa);
+			uvmdealloc(p->pagetable, a, oldsize);
+			return 0;
+		}
 		i++;
 		p->sz+=PGSIZE;
 	}
+
 	shm->refcount++;
+	release(&shm->lock);  
+	printf("ADDR: %p\n", addr);
+	copyout(p->pagetable, (uint64) addr, (char*)oldsize, sizeof(oldsize));
+	printf("ADDR: %p\n", addr);
 
-
-	release(&shm->lock);
-  
-  copyout(p->pagetable, (uint64)(*addr), (char*)&oldsize, sizeof(oldsize));
-	
-	pshm->va = (uint64) addr;
-	pshm->shm = shm; 
+	pshm.va = (uint64) addr;
+	pshm.shm = shm; 
 	return shmd;
 }
 

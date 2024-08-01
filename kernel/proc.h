@@ -110,6 +110,6 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-	struct procshm *oshm[NSHMPROC];
+	struct procshm oshm[NSHMPROC];
 };
 
