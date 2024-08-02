@@ -10,11 +10,13 @@ struct shmem
 	int key;
 	uint64 pa[NPAB];
 	int refcount;
-	int size;
+	int size;	//npages
 	struct spinlock lock;
 };
 
 struct shmem shmemtable[NSHM];
+int copyout2(pagetable_t pagetable, uint64 dstva, char *src, uint64 len);
+
 
 void shminit(void)
 {
@@ -69,8 +71,9 @@ int alloc_procshm(struct procshm* pshm){
 
 int shm_get(int key, int size, void **addr)
 {
-
-	if(size/PGSIZE > NPAB)
+	printf("ADDRget: %d\n", addr);
+	int npages = PGROUNDUP(size)/PGSIZE; 
+	if(npages > NPAB)
 		return -1;
 
 	struct procshm pshm;
@@ -83,12 +86,12 @@ int shm_get(int key, int size, void **addr)
 		return -1;
 	
 	struct proc *p = myproc();
-	char* pa;
+	uint64 pa;
 	uint64 oldsize = p->sz;
 	int i = 0;	
-	for(int a = oldsize; a < p->sz; a += PGSIZE){
+	for(int a = oldsize; a < size+oldsize; a += PGSIZE){
 		if (shm->refcount == 0) {
-			pa = kalloc();
+			pa = (uint64) kalloc();
 			if(pa == 0){
 				p->sz = uvmdealloc(p->pagetable, a, oldsize);
 				release(&shm->lock);
@@ -96,22 +99,20 @@ int shm_get(int key, int size, void **addr)
 			}
 			shm->pa[i] = (uint64) pa;
 		}else{
-			pa = (char*) shm->pa[i];
+			pa = shm->pa[i];
 		}
-		if(mappages(p->pagetable, a, PGSIZE, (uint64)pa, PTE_R|PTE_U|PTE_W) != 0){
-			kfree(pa);
+		if(mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W) != 0){
+			kfree((void*) pa);
 			uvmdealloc(p->pagetable, a, oldsize);
-			return 0;
+			return -1;
 		}
 		i++;
 		p->sz+=PGSIZE;
 	}
-
+	shm->size = npages;
 	shm->refcount++;
 	release(&shm->lock);  
-	printf("ADDR: %p\n", addr);
 	copyout(p->pagetable, (uint64) addr, (char*)oldsize, sizeof(oldsize));
-	printf("ADDR: %p\n", addr);
 
 	pshm.va = (uint64) addr;
 	pshm.shm = shm; 
@@ -120,5 +121,22 @@ int shm_get(int key, int size, void **addr)
 
 int shm_close(int shm)
 {
+	if(shm < 0 || shm >= NSHMPROC)
+		return -1;
+
+	struct proc *p = myproc();
+	struct procshm *pshm = &(p->oshm[shm]);
+	acquire(&pshm->shm->lock);
+	if(pshm->shm == 0)
+		return -1;
+	pshm->shm->refcount--;
+
+	int do_free = 0;
+	if (pshm->shm->refcount == 0) {
+		do_free = 1;
+	}
+	uvmunmap(p->pagetable, pshm->va, pshm->shm->size, do_free);
+	pshm->shm = 0;
+
 	return 0;
 }
