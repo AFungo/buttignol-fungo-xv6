@@ -50,31 +50,28 @@ struct shmem* find_shm(int key){
 
 }
 
-int alloc_procshm(struct procshm* pshm){
+int alloc_procshm(struct proc* p){
 
-	struct proc *p = myproc();
-	int shmd = -1;
 	for(int i = 0; i < NSHMPROC; i++){
 		// find a free prosition
 		struct procshm oshm = p->oshm[i];
 		if(!oshm.shm){
-			shmd = i;
-			*pshm = p->oshm[i];
-			break;
+			return i;
 		}
 	}
 
-	return shmd;
+	return -1;
 }
 
-int shm_get(int key, int size, void **addr)
+int 
+shm_get(int key, int size, uint64 addr)
 {
 	int npages = PGROUNDUP(size)/PGSIZE;
 	if(npages > NPAB)
 		return -1;
 
-	struct procshm pshm;
-	int shmd = alloc_procshm(&pshm);
+	struct proc *p = myproc();
+	int shmd = alloc_procshm(p);
 	if(shmd == -1)
 		return -1;
 	
@@ -82,11 +79,9 @@ int shm_get(int key, int size, void **addr)
 	if (!shm)
 		return -1;
 	
-	struct proc *p = myproc();
 	uint64 pa;
 	uint64 oldsize = p->sz;
-	int i = 0;	
-	for(int a = oldsize; a < size+oldsize; a += PGSIZE){
+	for(int a = oldsize, i=0; a < size+oldsize; a += PGSIZE, i++){
 		if (shm->refcount == 0) {
 			pa = (uint64) kalloc();
 			if(pa == 0){
@@ -95,24 +90,25 @@ int shm_get(int key, int size, void **addr)
 				return -1;
 			}
 			shm->pa[i] = (uint64) pa;
+			printf("PA ALLOCATED: %p\n", pa);
 		}else{
 			pa = shm->pa[i];
+			printf("PA MAPPED: %p\n", pa);
 		}
 		if(mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W) != 0){
 			kfree((void*) pa);
 			uvmdealloc(p->pagetable, a, oldsize);
 			return -1;
 		}
-		i++;
 		p->sz+=PGSIZE;
 	}
 	shm->size = npages;
 	shm->refcount++;
 	release(&shm->lock);
 	//Se rompe cuando hace *addr dentro de copyout
-	copyout(p->pagetable, (uint64)addr, (char*)oldsize, sizeof(oldsize));
-	pshm.va = (uint64) addr;
-	pshm.shm = shm;
+	copyout(p->pagetable, addr, (char*)&oldsize, sizeof(oldsize));
+	p->oshm[shmd].va = oldsize;
+	p->oshm[shmd].shm = shm;
 	return shmd;
 }
 

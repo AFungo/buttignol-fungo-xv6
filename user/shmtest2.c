@@ -4,10 +4,11 @@
 #include "kernel/fcntl.h"
 
 int main(void) {
-    int* addr = 0; // Use a single pointer for the address
-    shm_get(5, 4096, (void*) &addr); // Get the shared memory ID and map the memory
+    int* addr; // Use a single pointer for the address
+    shm_get(5, 4096, (void**) &addr); // Get the shared memory ID and map the memory
 
-    printf("Stored value: %d\n", &addr);
+    printf("Shared memory address: %p\n", addr);
+    printf("Stored value: %d\n", addr[0]);
 
     /* char* str = (char*)&addr + sizeof(int);
     printf("Stored string: %s\n", str); */

@@ -187,7 +187,7 @@ void            virtio_disk_intr(void);
 
 // sharedmem.c
 void            shminit(void);
-int             shm_get(int, int, void**);
+int             shm_get(int, int, uint64);
 int             shm_close(int);
 
 // number of elements in fixed-size array
