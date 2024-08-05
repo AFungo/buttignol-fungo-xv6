@@ -15,8 +15,6 @@ struct shmem
 };
 
 struct shmem shmemtable[NSHM];
-int copyout2(pagetable_t pagetable, uint64 dstva, char *src, uint64 len);
-
 
 void shminit(void)
 {
@@ -71,8 +69,7 @@ int alloc_procshm(struct procshm* pshm){
 
 int shm_get(int key, int size, void **addr)
 {
-	printf("ADDRget: %d\n", addr);
-	int npages = PGROUNDUP(size)/PGSIZE; 
+	int npages = PGROUNDUP(size)/PGSIZE;
 	if(npages > NPAB)
 		return -1;
 
@@ -111,11 +108,11 @@ int shm_get(int key, int size, void **addr)
 	}
 	shm->size = npages;
 	shm->refcount++;
-	release(&shm->lock);  
-	copyout(p->pagetable, (uint64) addr, (char*)oldsize, sizeof(oldsize));
-
+	release(&shm->lock);
+	//Se rompe cuando hace *addr dentro de copyout
+	copyout(p->pagetable, (uint64)addr, (char*)oldsize, sizeof(oldsize));
 	pshm.va = (uint64) addr;
-	pshm.shm = shm; 
+	pshm.shm = shm;
 	return shmd;
 }
 
