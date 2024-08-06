@@ -26,16 +26,16 @@ void shminit(void)
 	}
 }
 
-struct shmem* find_shm(int key){
-	
+struct shmem* find_shm(int key)
+{
 	struct shmem *shm = 0;
-	
-	for(struct shmem *curr_shm = shmemtable; curr_shm < &shmemtable[NSHM]; curr_shm++){
+	int i = 0;
+	for(struct shmem *curr_shm = shmemtable; curr_shm < &shmemtable[NSHM]; curr_shm++, i++){
 		// duplicated key
 		if(curr_shm->key == key && curr_shm->refcount > 0){
 			if (shm)
 				release(&shm->lock);
-
+			acquire(&curr_shm->lock);
 			shm = curr_shm;
 			break;
 		}
@@ -43,15 +43,15 @@ struct shmem* find_shm(int key){
 		if(!shm && curr_shm->refcount == 0){
 			acquire(&curr_shm->lock);
 			shm = curr_shm;
-			// break;
+			shm->key = key;
 		}
 	}
 	return shm;
 
 }
 
-int alloc_procshm(struct proc* p){
-
+int alloc_procshm(struct proc* p)
+{
 	for(int i = 0; i < NSHMPROC; i++){
 		// find a free prosition
 		struct procshm oshm = p->oshm[i];
@@ -80,32 +80,31 @@ shm_get(int key, int size, uint64 addr)
 		return -1;
 	
 	uint64 pa;
-	uint64 oldsize = p->sz;
+	uint64 oldsize = p->shmsz;
 	for(int a = oldsize, i=0; a < size+oldsize; a += PGSIZE, i++){
 		if (shm->refcount == 0) {
 			pa = (uint64) kalloc();
 			if(pa == 0){
-				p->sz = uvmdealloc(p->pagetable, a, oldsize);
+				p->shmsz = uvmdealloc(p->pagetable, a, oldsize);
 				release(&shm->lock);
 				return -1;
 			}
 			shm->pa[i] = (uint64) pa;
-			printf("PA ALLOCATED: %p\n", pa);
 		}else{
 			pa = shm->pa[i];
-			printf("PA MAPPED: %p\n", pa);
 		}
+
 		if(mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W) != 0){
 			kfree((void*) pa);
 			uvmdealloc(p->pagetable, a, oldsize);
 			return -1;
 		}
-		p->sz+=PGSIZE;
+		
+		p->shmsz+=PGSIZE;
 	}
 	shm->size = npages;
 	shm->refcount++;
 	release(&shm->lock);
-	//Se rompe cuando hace *addr dentro de copyout
 	copyout(p->pagetable, addr, (char*)&oldsize, sizeof(oldsize));
 	p->oshm[shmd].va = oldsize;
 	p->oshm[shmd].shm = shm;
@@ -118,18 +117,18 @@ int shm_close(int shm)
 		return -1;
 
 	struct proc *p = myproc();
-	struct procshm *pshm = &(p->oshm[shm]);
-	acquire(&pshm->shm->lock);
-	if(pshm->shm == 0)
+	acquire(&p->oshm[shm].shm->lock);
+	if(p->oshm[shm].shm == 0)
 		return -1;
-	pshm->shm->refcount--;
+	p->oshm[shm].shm->refcount--;
 
 	int do_free = 0;
-	if (pshm->shm->refcount == 0) {
+	if (p->oshm[shm].shm->refcount == 0) {
 		do_free = 1;
 	}
-	uvmunmap(p->pagetable, pshm->va, pshm->shm->size, do_free);
-	pshm->shm = 0;
-
+	uvmunmap(p->pagetable, p->oshm[shm].va, p->oshm[shm].shm->size, do_free);
+	release(&p->oshm[shm].shm->lock);
+	p->oshm[shm].shm = 0;
+	p->oshm[shm].va = 0;
 	return 0;
 }

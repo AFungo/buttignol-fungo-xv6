@@ -16,5 +16,7 @@ sys_shm_get(void)
 uint64
 sys_shm_close(void)
 {
-    return 0;
+    int shm;
+    argint(0, &shm);
+    return shm_close(shm);
 }

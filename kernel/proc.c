@@ -359,7 +359,14 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  
+  for(int shmd = 0; shmd < NSHMPROC; shmd++){
+    if(p->oshm[shmd].shm){
+      shm_close(shmd);   
+    }
+  }
+  p->shmsz = p->sz;
+  
   begin_op();
   iput(p->cwd);
   end_op();

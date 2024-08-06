@@ -17,6 +17,14 @@ int main(void) {
 
     // Store values in the scharhared memory
     addr[0] = 42;     // Store an integer value
-    printf("Stored value: %d\n", addr[0]);
-    exit(0);
+    printf("Stored value: %d\n", *addr);
+
+    while(addr[0] == 42) {
+        sleep(10);
+        printf("Stored value: %d\n", *addr);    
+    }
+
+    printf("FINAL Stored value: %d\n", *addr);    
+    printf("ENDED\n");
+    return 0;
 }

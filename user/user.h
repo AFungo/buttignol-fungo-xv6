@@ -23,6 +23,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int shm_get(int key, int size, void** addr);
+int shm_close(int shm);
 
 // ulib.c
 int stat(const char*, struct stat*);
