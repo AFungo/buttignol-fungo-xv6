@@ -17,14 +17,19 @@ int main(void) {
 
     // Store values in the scharhared memory
     addr[0] = 42;     // Store an integer value
+
+    if (fork() == 0) {
+        int* address; // Use a single pointer for the 
+        shm_get(5, 4096, (void**) &address); // Get the shared memory ID and map the memory
+        printf("Stored value TEST 2: %d\n", *address);
+
+        address[0] = 10;
+        printf("NEW STORED VALUE: %d\n", *address);
+        exit(0);
+    }
+    wait(0);
     printf("Stored value: %d\n", *addr);
 
-    while(addr[0] == 42) {
-        sleep(10);
-        printf("Stored value: %d\n", *addr);    
-    }
 
-    printf("FINAL Stored value: %d\n", *addr);    
-    printf("ENDED\n");
     return 0;
 }
