@@ -38,3 +38,8 @@ entry("sleep");
 entry("uptime");
 entry("shm_get");
 entry("shm_close");
+entry("semcreate");
+entry("semget");
+entry("semsignal");
+entry("semwait");
+entry("semclose");

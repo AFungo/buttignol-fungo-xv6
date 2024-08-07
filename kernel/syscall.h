@@ -22,3 +22,8 @@
 #define SYS_close  21
 #define SYS_shm_get  22
 #define SYS_shm_close  23
+#define SYS_semcreate 24
+#define SYS_semget  25
+#define SYS_semsignal 26
+#define SYS_semwait 27
+#define SYS_semclose  28

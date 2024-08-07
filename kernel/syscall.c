@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
+#include "syssemaphore.c"
 #include "sysshm.c"
 
 // Fetch the uint64 at addr from the current process.
@@ -102,6 +103,11 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_semcreate(void);
+extern uint64 sys_semget(void);
+extern uint64 sys_semsignal(void);
+extern uint64 sys_semwait(void);
+extern uint64 sys_semclose(void);
 extern uint64 sys_shm_get(void);
 extern uint64 sys_shm_close(void);
 
@@ -130,7 +136,12 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_shm_get]   sys_shm_get,
-[SYS_shm_close]   sys_shm_close
+[SYS_shm_close]   sys_shm_close,
+[SYS_semcreate]	sys_semcreate,
+[SYS_semget]	sys_semget,
+[SYS_semsignal]	sys_semsignal,
+[SYS_semwait]	sys_semwait,
+[SYS_semclose]	sys_semclose
 };
 
 void

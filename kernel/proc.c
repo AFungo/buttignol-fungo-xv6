@@ -360,6 +360,14 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+	// Close all open semaphores
+	for(int sd = 0; sd < NSEMP; sd++){
+		if(p->osems[sd] != 0){
+			semclose(sd);
+			p->osems[sd] = 0;
+		}
+	}
   
   for(int shmd = 0; shmd < NSHMPROC; shmd++){
     if(p->oshm[shmd].shm){

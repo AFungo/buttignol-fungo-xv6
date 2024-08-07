@@ -24,6 +24,11 @@ int sleep(int);
 int uptime(void);
 int shm_get(int key, int size, void** addr);
 int shm_close(int shm);
+int semcreate(int key, int value);
+int semget(int key);
+int semsignal(int sd);
+int semwait(int sd);
+int semclose(int sd);
 
 // ulib.c
 int stat(const char*, struct stat*);
