@@ -3,33 +3,75 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
-int main(void) {    
-    int* addr;
-    int shmd = shm_get(5, 4096, (void **)&addr);
-    
-    if (shmd < 0) {
-        printf("Failed to get shared memory.\n");
-        exit(1);
+#define BFSZ 10
+
+struct buffer{
+    int addr[BFSZ];
+    int first;
+    int last;
+    int is_empty;
+    int is_full;
+    int mutex;
+}buffer;
+
+void buffer_init(struct buffer *buff, int key){
+    buff->first = -1;
+    buff->last = 0;
+    buff->is_empty = semcreate(0, 0);
+    buff->is_full = semcreate(1, BFSZ);
+    buff->mutex = semcreate(2, 1);
+}
+
+void enqueue(struct buffer *bf, int n) {
+    semwait(bf->mutex);
+    if (bf->first == -1)
+        bf->first++;
+    bf->addr[bf->last] = n;
+    bf->last = (bf->last + 1) % BFSZ;
+    semsignal(bf->mutex);
+}
+
+int dequeue(struct buffer *bf) {
+    semwait(bf->mutex);
+    int val = bf->addr[bf->first];
+    bf->first = (bf->first + 1) % BFSZ;
+    semsignal(bf->mutex);
+    return val;
+}
+
+void getbuffer(struct buffer *bf){
+    shm_get(4, sizeof(struct buffer), (void**)&bf);
+    bf->is_empty = semget(0);
+    bf->is_full = semget(1);
+    bf->mutex = semget(2);
+}
+
+int main(void) {
+    struct buffer *bf;
+    shm_get(4, sizeof(struct buffer), (void**)&bf);
+    buffer_init(bf, 5);
+    printf("size = %d - %d\n", sizeof(struct buffer), sizeof(*bf));
+    if (fork() == 0) {    
+        // child process
+        // consumer
+        getbuffer(bf);
+        for (int i = 0; i < BFSZ; i++) {
+            semwait(bf->is_empty);
+            // sleep(5);
+            // printf("Dequeuing: %d\n", dequeue(bf));
+            semsignal(bf->is_full);
+        }
+    } else {
+        // parent process
+        // producer
+        for (int i = 0; i < BFSZ; i++) {
+            semwait(bf->is_full);
+            enqueue(bf, i);
+            // printf("Enqueuing: %d\n", i);
+            // sleep(5);
+            semsignal(bf->is_empty);
+        }
+        wait(0);
     }
-
-    printf("Shared memory id: %d\n", shmd);
-    printf("Shared memory address: %p\n", addr);
-
-    // Store values in the scharhared memory
-    addr[0] = 42;     // Store an integer value
-
-    if (fork() == 0) {
-        int* address; // Use a single pointer for the 
-        shm_get(5, 4096, (void**) &address); // Get the shared memory ID and map the memory
-        printf("Stored value TEST 2: %d\n", *address);
-
-        address[0] = 10;
-        printf("NEW STORED VALUE: %d\n", *address);
-        exit(0);
-    }
-    wait(0);
-    printf("Stored value: %d\n", *addr);
-
-
     return 0;
 }
