@@ -30,7 +30,7 @@ OBJS = \
   $K/plic.o \
   $K/semaphore.o \
   $K/virtio_disk.o \
-	$K/sharedmem.o \
+  $K/sharedmem.o \
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
 #TOOLPREFIX = 
@@ -136,6 +136,9 @@ UPROGS=\
 	$U/_semtest\
 	$U/_shmtest\
 	$U/_shmtest2\
+	$U/_producer\
+	$U/_consumer\
+	$U/_prodcons\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
