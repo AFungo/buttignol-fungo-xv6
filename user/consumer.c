@@ -1,19 +1,21 @@
-#include "user/buffer.h"
+#include "user/queue.h"
 
 int main(void) {
 
-    struct buffer *bf;
-    if(shm_get(1, sizeof(struct buffer), (void**)&bf) == -1){
+    struct queue *q;
+    if(shm_get(1, sizeof(struct queue), (void**)&q) == -1){
         printf("shm_get failed\n");
         exit(1);
     }
-    bf->is_empty = semget(0);
-    bf->is_full = semget(1);
-    bf->mutex = semget(2);
+    int is_empty = semget(0);
+    int is_full = semget(1);
+    q->mutex = semget(2);
 
-    for (int i = 0; i < BFSZ; i++) {
+    for (int i = 0; i < QSZ; i++) {
         sleep(5);
-        printf("Dequeuing: %d\n", dequeue(bf));
+        semwait(is_empty);
+        printf("Dequeuing: %d\n", dequeue(q));
+        semsignal(is_full);
     }
 
     exit(0);

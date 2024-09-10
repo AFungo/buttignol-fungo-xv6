@@ -134,8 +134,6 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_semtest\
-	$U/_shmtest\
-	$U/_shmtest2\
 	$U/_producer\
 	$U/_consumer\
 	$U/_prodcons\

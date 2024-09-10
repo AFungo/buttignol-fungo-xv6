@@ -5,17 +5,20 @@
 #include "proc.h"
 #include "defs.h"
 
+// Shared memory structure
 struct shmem
 {
-	int key;
-	uint64 pa[NPAB];
-	int refcount;
-	int size;	//npages
+	int key;				// Global ID
+	uint64 pa[NPAB];		// Array of physical addresses
+	int refcount;	
+	int size;				// npages
 	struct spinlock lock;
 };
 
+// Shared memories global table
 struct shmem shmemtable[NSHM];
 
+// Initialize shmemtable from main
 void shminit(void)
 {
 	for(int i = 0; i < NSHM; i++){
@@ -26,6 +29,7 @@ void shminit(void)
 	}
 }
 
+// Find a shm by key or return a free shared memory
 struct shmem* find_shm(int key)
 {
 	struct shmem *shm = 0;
@@ -47,9 +51,9 @@ struct shmem* find_shm(int key)
 		}
 	}
 	return shm;
-
 }
 
+// Find a free space in processes oshm
 int alloc_procshm(struct proc* p)
 {
 	for(int i = 0; i < NSHMPROC; i++){
@@ -59,12 +63,11 @@ int alloc_procshm(struct proc* p)
 			return i;
 		}
 	}
-
 	return -1;
 }
 
-int 
-shm_get(int key, int size, uint64 addr)
+// Get/create a shared memory of a given size
+int shm_get(int key, int size, uint64 addr)
 {
 	int npages = PGROUNDUP(size)/PGSIZE;
 	if(npages > NPAB)
@@ -83,6 +86,7 @@ shm_get(int key, int size, uint64 addr)
 	uint64 oldsize = p->shmsz;
 	for(int a = oldsize, i=0; a < size+oldsize; a += PGSIZE, i++){
 		if (shm->refcount == 0) {
+			//this case allocate physical memory
 			pa = (uint64) kalloc();
 			if(pa == 0){
 				p->shmsz = uvmdealloc(p->pagetable, a, oldsize);
@@ -91,9 +95,11 @@ shm_get(int key, int size, uint64 addr)
 			}
 			shm->pa[i] = (uint64) pa;
 		}else{
+			//otherwise we can get it from shared memory
 			pa = shm->pa[i];
 		}
 
+		// Map physical address to 'a'
 		if(mappages(p->pagetable, a, PGSIZE, pa, PTE_R|PTE_U|PTE_W) != 0){
 			kfree((void*) pa);
 			uvmdealloc(p->pagetable, a, oldsize);
@@ -105,12 +111,14 @@ shm_get(int key, int size, uint64 addr)
 	shm->size = npages;
 	shm->refcount++;
 	release(&shm->lock);
+	// Copy from kernel space to user space
 	copyout(p->pagetable, addr, (char*)&oldsize, sizeof(oldsize));
 	p->oshm[shmd].va = oldsize;
 	p->oshm[shmd].shm = shm;
 	return shmd;
 }
 
+// Free a shared memory
 int shm_close(int shm)
 {
 	if(shm < 0 || shm >= NSHMPROC)
@@ -118,14 +126,18 @@ int shm_close(int shm)
 
 	struct proc *p = myproc();
 	acquire(&p->oshm[shm].shm->lock);
+	
 	if(p->oshm[shm].shm == 0)
 		return -1;
+
 	p->oshm[shm].shm->refcount--;
 
 	int do_free = 0;
 	if (p->oshm[shm].shm->refcount == 0) {
+		// If shm dont have any other reference we have to free physical memory
 		do_free = 1;
 	}
+
 	uvmunmap(p->pagetable, p->oshm[shm].va, p->oshm[shm].shm->size, do_free);
 	release(&p->oshm[shm].shm->lock);
 	p->oshm[shm].shm = 0;

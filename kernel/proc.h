@@ -81,9 +81,10 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+// Per-process shared memory descriptor
 struct procshm{
-	uint64 va;
-	struct shmem *shm;
+	uint64 va;                  //virtual address
+  struct shmem *shm;          //pointer to structure associated to va
 };
 
 // Per-process state
@@ -112,6 +113,6 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   uint64 shmsz;                // Size of shared memories.
-	struct procshm oshm[NSHMPROC];
+	struct procshm oshm[NSHMPROC]; //Open Shared memories
 };
 

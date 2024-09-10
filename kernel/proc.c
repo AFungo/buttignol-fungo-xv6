@@ -369,13 +369,15 @@ exit(int status)
 		}
 	}
   
+  // Close all open shared memories
   for(int shmd = 0; shmd < NSHMPROC; shmd++){
     if(p->oshm[shmd].shm){
       shm_close(shmd);   
     }
   }
+  //restore shared memories size
   p->shmsz = p->sz;
-  
+
   begin_op();
   iput(p->cwd);
   end_op();

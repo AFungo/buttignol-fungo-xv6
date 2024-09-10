@@ -1,12 +1,14 @@
-#include "user/buffer.h"
+#include "user/queue.h"
 
 int main(void) {
-    struct buffer *bf;
-    if(shm_get(1, sizeof(struct buffer), (void**)&bf) == -1){
+    struct queue *q;
+    if(shm_get(1, sizeof(struct queue), (void**)&q) == -1){
         printf("shm_get failed\n");
         exit(1);
     }
-    buffer_init(bf);
+    queue_init(q);
+    semcreate(0, 0);
+    semcreate(1, QSZ);
     if (fork() == 0) {
         char* args1[] = {"producer", 0};
         exec("producer", args1);
